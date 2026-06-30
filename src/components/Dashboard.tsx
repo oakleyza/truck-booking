@@ -105,7 +105,7 @@ export default function Dashboard() {
                                 <p className="text-sm font-semibold text-gray-800 truncate">{c.customerName}</p>
                                 {c.phone && <p className="text-sm text-gray-500 mt-0.5">📞 {c.phone}</p>}
                                 {c.address && <p className="text-sm text-gray-500 truncate">📍 {c.address}</p>}
-                                {c.notes && <p className="text-xs text-gray-400 italic truncate">{c.notes}</p>}
+                                {c.notes && <p className="text-sm text-gray-400 italic truncate">หมายเหตุ: {c.notes}</p>}
                                 {c.mapsLink && (
                                   <a href={c.mapsLink} target="_blank" rel="noopener noreferrer"
                                     className="text-sm text-blue-500 hover:underline">

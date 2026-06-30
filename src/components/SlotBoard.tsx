@@ -222,7 +222,7 @@ export default function SlotBoard({ selectedDate }: Props) {
                               <div className="mt-2 pt-2 border-t border-blue-200 space-y-1 text-xs text-gray-600">
                                 {c.phone && <p className="text-sm">📞 {c.phone}</p>}
                                 {c.address && <p className="text-sm">🏠 {c.address}</p>}
-                                {c.notes && <p className="italic text-gray-400">💬 {c.notes}</p>}
+                                {c.notes && <p className="text-sm italic text-gray-400">💬 หมายเหตุ: {c.notes}</p>}
                                 {c.mapsLink && (
                                   <a
                                     href={c.mapsLink}
