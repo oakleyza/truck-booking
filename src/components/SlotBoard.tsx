@@ -1,91 +1,104 @@
 import { useState, useEffect } from 'react'
 import {
   collection, query, where, onSnapshot,
-  addDoc, deleteDoc, doc, serverTimestamp,
+  addDoc, updateDoc, deleteDoc, doc, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useAuth } from '../contexts/AuthContext'
-import { TIME_SLOTS, TRUCK_NUMBERS, TimeSlot, TruckNumber, Booking } from '../types'
+import { TIME_SLOTS, TRUCK_NAMES, SLOT_LABEL, TimeSlot, TruckName, Booking, Customer } from '../types'
 
 interface Props {
   selectedDate: string
 }
 
-interface BookingModalState {
-  mode: 'new' | 'view'
-  slot: TimeSlot
-  truck: TruckNumber
-  booking?: Booking
+function uid(): string {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36)
+}
+
+function emptyCustomer(): Omit<Customer, 'cid'> {
+  return { customerName: '', phone: '', mapsLink: '', address: '', notes: '' }
 }
 
 function formatDate(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number)
-  const thaiMonths = [
-    'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
-    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
-  ]
-  return `${d} ${thaiMonths[m - 1]} ${y + 543}`
+  const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
+  return `${d} ${months[m - 1]} ${y + 543}`
+}
+
+type ModalMode = 'add' | 'view'
+
+interface ModalState {
+  mode: ModalMode
+  slot: TimeSlot
+  truck: TruckName
+  booking?: Booking       // existing booking for this cell (if any)
+  editCustomer?: Customer // customer being viewed/edited
 }
 
 export default function SlotBoard({ selectedDate }: Props) {
   const { currentUser } = useAuth()
   const [bookings, setBookings] = useState<Booking[]>([])
-  const [modal, setModal] = useState<BookingModalState | null>(null)
-  const [customerName, setCustomerName] = useState('')
-  const [notes, setNotes] = useState('')
+  const [modal, setModal] = useState<ModalState | null>(null)
+
+  // Add customer form state
+  const [form, setForm] = useState(emptyCustomer())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  // View customer — expand/collapse detail
+  const [expandedCid, setExpandedCid] = useState<string | null>(null)
+
   useEffect(() => {
     if (!selectedDate) return
-    const q = query(
-      collection(db, 'bookings'),
-      where('date', '==', selectedDate)
-    )
-    const unsub = onSnapshot(q, snap => {
+    const q = query(collection(db, 'bookings'), where('date', '==', selectedDate))
+    return onSnapshot(q, snap => {
       setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking)))
     })
-    return () => unsub()
   }, [selectedDate])
 
-  function getBooking(slot: TimeSlot, truck: TruckNumber): Booking | undefined {
+  function getBooking(slot: TimeSlot, truck: TruckName): Booking | undefined {
     return bookings.find(b => b.slot === slot && b.truck === truck)
   }
 
-  function openNew(slot: TimeSlot, truck: TruckNumber) {
-    setModal({ mode: 'new', slot, truck })
-    setCustomerName('')
-    setNotes('')
-    setError('')
-  }
-
-  function openView(booking: Booking) {
-    setModal({ mode: 'view', slot: booking.slot, truck: booking.truck, booking })
+  function openAdd(slot: TimeSlot, truck: TruckName) {
+    const booking = getBooking(slot, truck)
+    setModal({ mode: 'add', slot, truck, booking })
+    setForm(emptyCustomer())
     setError('')
   }
 
   function closeModal() {
     setModal(null)
     setError('')
+    setExpandedCid(null)
   }
 
-  async function handleBook() {
+  // Save new customer to a slot
+  async function handleSave() {
     if (!modal || !currentUser) return
-    if (!customerName.trim()) {
-      setError('กรุณากรอกชื่อลูกค้า')
-      return
-    }
+    if (!form.customerName.trim()) { setError('กรุณากรอกชื่อลูกค้า'); return }
+
     setSaving(true)
+    setError('')
+    const newCustomer: Customer = { cid: uid(), ...form, customerName: form.customerName.trim() }
+
     try {
-      await addDoc(collection(db, 'bookings'), {
-        date: selectedDate,
-        slot: modal.slot,
-        truck: modal.truck,
-        customerName: customerName.trim(),
-        notes: notes.trim(),
-        createdBy: currentUser.username,
-        createdAt: serverTimestamp(),
-      })
+      if (modal.booking) {
+        // Add to existing booking
+        await updateDoc(doc(db, 'bookings', modal.booking.id), {
+          customers: [...modal.booking.customers, newCustomer],
+        })
+      } else {
+        // Create new booking
+        await addDoc(collection(db, 'bookings'), {
+          date: selectedDate,
+          slot: modal.slot,
+          truck: modal.truck,
+          customers: [newCustomer],
+          createdBy: currentUser.username,
+          createdAt: serverTimestamp(),
+        })
+      }
       closeModal()
     } catch {
       setError('บันทึกไม่สำเร็จ กรุณาลองใหม่')
@@ -94,16 +107,19 @@ export default function SlotBoard({ selectedDate }: Props) {
     }
   }
 
-  async function handleCancel() {
-    if (!modal?.booking) return
-    setSaving(true)
+  // Delete a single customer from a booking
+  async function handleDeleteCustomer(booking: Booking, cid: string) {
+    if (!confirm('ลบลูกค้ารายนี้ออก?')) return
+    const remaining = booking.customers.filter(c => c.cid !== cid)
     try {
-      await deleteDoc(doc(db, 'bookings', modal.booking.id))
+      if (remaining.length === 0) {
+        await deleteDoc(doc(db, 'bookings', booking.id))
+      } else {
+        await updateDoc(doc(db, 'bookings', booking.id), { customers: remaining })
+      }
       closeModal()
     } catch {
-      setError('ยกเลิกไม่สำเร็จ กรุณาลองใหม่')
-    } finally {
-      setSaving(false)
+      alert('ลบไม่สำเร็จ กรุณาลองใหม่')
     }
   }
 
@@ -120,43 +136,77 @@ export default function SlotBoard({ selectedDate }: Props) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-gray-50">
-              <th className="text-left px-4 py-2.5 font-medium text-gray-500 w-32">ช่วงเวลา</th>
-              {TRUCK_NUMBERS.map(t => (
-                <th key={t} className="text-center px-2 py-2.5 font-medium text-gray-700">
-                  🚚 รถคัน {t}
+            <tr className="bg-gray-50 border-b border-gray-100">
+              <th className="text-left px-4 py-2.5 font-medium text-gray-400 text-xs w-24">ช่วงเวลา</th>
+              {TRUCK_NAMES.map(t => (
+                <th key={t} className="text-center px-3 py-2.5 font-semibold text-gray-700 text-sm">
+                  🚚 {t}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {TIME_SLOTS.map((slot, i) => (
-              <tr key={slot} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
-                <td className="px-4 py-3 text-xs font-medium text-gray-500 whitespace-nowrap">
-                  {slot}
+              <tr key={slot} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'}>
+                <td className="px-4 py-3 text-xs font-semibold text-gray-500 whitespace-nowrap align-top pt-4">
+                  {SLOT_LABEL[slot]}
                 </td>
-                {TRUCK_NUMBERS.map(truck => {
+                {TRUCK_NAMES.map(truck => {
                   const booking = getBooking(slot, truck)
+                  const customers = booking?.customers ?? []
+
                   return (
-                    <td key={truck} className="px-2 py-2 text-center">
-                      {booking ? (
+                    <td key={truck} className="px-3 py-3 align-top">
+                      <div className="space-y-1.5">
+                        {/* Customer list */}
+                        {customers.map((c, idx) => (
+                          <div key={c.cid}
+                            className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 cursor-pointer hover:bg-blue-100 transition-colors"
+                            onClick={() => setExpandedCid(expandedCid === c.cid ? null : c.cid)}
+                          >
+                            <div className="flex items-center justify-between gap-1">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-[10px] font-bold text-blue-400 shrink-0">{idx + 1}</span>
+                                <span className="text-xs font-semibold text-gray-800 truncate">{c.customerName}</span>
+                              </div>
+                              <button
+                                onClick={e => { e.stopPropagation(); booking && handleDeleteCustomer(booking, c.cid) }}
+                                className="text-[10px] text-red-400 hover:text-red-600 shrink-0 px-1 py-0.5 rounded hover:bg-red-50"
+                              >
+                                ลบ
+                              </button>
+                            </div>
+
+                            {/* Expanded detail */}
+                            {expandedCid === c.cid && (
+                              <div className="mt-2 pt-2 border-t border-blue-200 space-y-1 text-xs text-gray-600">
+                                {c.phone && <p>📞 {c.phone}</p>}
+                                {c.address && <p>🏠 {c.address}</p>}
+                                {c.notes && <p className="italic text-gray-400">💬 {c.notes}</p>}
+                                {c.mapsLink && (
+                                  <a href={c.mapsLink} target="_blank" rel="noopener noreferrer"
+                                    onClick={e => e.stopPropagation()}
+                                    className="text-blue-500 hover:underline flex items-center gap-1">
+                                    📌 ดูแผนที่
+                                  </a>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+
+                        {/* Add button */}
                         <button
-                          onClick={() => openView(booking)}
-                          className="w-full bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg px-2 py-2 text-xs text-left transition-colors"
+                          onClick={() => openAdd(slot, truck)}
+                          className={`w-full rounded-lg py-2 text-xs transition-colors ${
+                            customers.length === 0
+                              ? 'border-2 border-dashed border-gray-200 hover:border-blue-400 hover:bg-blue-50 text-gray-300 hover:text-blue-400'
+                              : 'border border-dashed border-blue-200 hover:border-blue-400 text-blue-400 hover:text-blue-600 hover:bg-blue-50'
+                          }`}
                         >
-                          <div className="font-semibold truncate">{booking.customerName}</div>
-                          {booking.notes && (
-                            <div className="text-blue-600 text-[10px] truncate mt-0.5">{booking.notes}</div>
-                          )}
+                          {customers.length === 0 ? '+ จอง' : '+ เพิ่มลูกค้า'}
                         </button>
-                      ) : (
-                        <button
-                          onClick={() => openNew(slot, truck)}
-                          className="w-full border-2 border-dashed border-gray-200 hover:border-blue-400 hover:bg-blue-50 rounded-lg py-3 text-gray-300 hover:text-blue-400 transition-colors text-xs"
-                        >
-                          + จอง
-                        </button>
-                      )}
+                      </div>
                     </td>
                   )
                 })}
@@ -166,110 +216,89 @@ export default function SlotBoard({ selectedDate }: Props) {
         </table>
       </div>
 
-      {/* Modal */}
-      {modal && (
-        <div
-          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
-          onClick={e => { if (e.target === e.currentTarget) closeModal() }}
-        >
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-            {modal.mode === 'new' ? (
-              <>
-                <h3 className="font-bold text-gray-800 mb-1">จองรถ</h3>
-                <p className="text-xs text-gray-500 mb-4">
-                  รถคัน {modal.truck} · {modal.slot} · {formatDate(selectedDate)}
-                </p>
+      {/* Add customer modal */}
+      {modal?.mode === 'add' && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onClick={e => { if (e.target === e.currentTarget) closeModal() }}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+            <h3 className="font-bold text-gray-800 mb-1">
+              {modal.booking ? 'เพิ่มลูกค้า' : 'จองรถ'}
+            </h3>
+            <p className="text-xs text-gray-400 mb-4">
+              {modal.truck} · {SLOT_LABEL[modal.slot]} · {formatDate(selectedDate)}
+              {modal.booking && ` · ลูกค้าคนที่ ${modal.booking.customers.length + 1}`}
+            </p>
 
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      ชื่อลูกค้า <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      autoFocus
-                      value={customerName}
-                      onChange={e => setCustomerName(e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="ชื่อลูกค้า / ชื่อโปรเจกต์"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">หมายเหตุ</label>
-                    <textarea
-                      value={notes}
-                      onChange={e => setNotes(e.target.value)}
-                      rows={2}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-                      placeholder="เช่น สินค้า, ปลายทาง..."
-                    />
-                  </div>
-                </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  ชื่อลูกค้า <span className="text-red-500">*</span>
+                </label>
+                <input
+                  autoFocus
+                  value={form.customerName}
+                  onChange={e => setForm(f => ({ ...f, customerName: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="ชื่อลูกค้า / ชื่อโปรเจกต์"
+                />
+              </div>
 
-                {error && (
-                  <p className="text-red-600 text-xs mt-2">{error}</p>
-                )}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">เบอร์โทร</label>
+                <input
+                  type="tel"
+                  value={form.phone}
+                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0xx-xxx-xxxx"
+                />
+              </div>
 
-                <div className="flex gap-2 mt-4">
-                  <button
-                    onClick={closeModal}
-                    className="flex-1 border border-gray-300 text-gray-700 rounded-lg py-2 text-sm hover:bg-gray-50 transition-colors"
-                  >
-                    ยกเลิก
-                  </button>
-                  <button
-                    onClick={handleBook}
-                    disabled={saving}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg py-2 text-sm font-medium transition-colors"
-                  >
-                    {saving ? 'บันทึก...' : 'ยืนยันจอง'}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <h3 className="font-bold text-gray-800 mb-1">รายละเอียดการจอง</h3>
-                <p className="text-xs text-gray-500 mb-4">
-                  รถคัน {modal.truck} · {modal.slot} · {formatDate(selectedDate)}
-                </p>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">ที่อยู่</label>
+                <textarea
+                  value={form.address}
+                  onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
+                  rows={2}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  placeholder="บ้านเลขที่ หมู่บ้าน ซอย ถนน ตำบล อำเภอ"
+                />
+              </div>
 
-                <div className="bg-gray-50 rounded-lg p-3 space-y-2 text-sm">
-                  <div>
-                    <span className="text-xs text-gray-500">ลูกค้า</span>
-                    <p className="font-semibold text-gray-800">{modal.booking?.customerName}</p>
-                  </div>
-                  {modal.booking?.notes && (
-                    <div>
-                      <span className="text-xs text-gray-500">หมายเหตุ</span>
-                      <p className="text-gray-700">{modal.booking.notes}</p>
-                    </div>
-                  )}
-                  <div>
-                    <span className="text-xs text-gray-500">จองโดย</span>
-                    <p className="text-gray-700">{modal.booking?.createdBy}</p>
-                  </div>
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Link Google Maps</label>
+                <input
+                  value={form.mapsLink}
+                  onChange={e => setForm(f => ({ ...f, mapsLink: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="https://maps.google.com/..."
+                />
+              </div>
 
-                {error && (
-                  <p className="text-red-600 text-xs mt-2">{error}</p>
-                )}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">หมายเหตุ</label>
+                <textarea
+                  value={form.notes}
+                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                  rows={2}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  placeholder="รายละเอียดเพิ่มเติม..."
+                />
+              </div>
+            </div>
 
-                <div className="flex gap-2 mt-4">
-                  <button
-                    onClick={closeModal}
-                    className="flex-1 border border-gray-300 text-gray-700 rounded-lg py-2 text-sm hover:bg-gray-50 transition-colors"
-                  >
-                    ปิด
-                  </button>
-                  <button
-                    onClick={handleCancel}
-                    disabled={saving}
-                    className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg py-2 text-sm font-medium transition-colors"
-                  >
-                    {saving ? 'กำลังยกเลิก...' : 'ยกเลิกการจอง'}
-                  </button>
-                </div>
-              </>
-            )}
+            {error && <p className="text-red-600 text-xs mt-2">{error}</p>}
+
+            <div className="flex gap-2 mt-4">
+              <button onClick={closeModal}
+                className="flex-1 border border-gray-300 text-gray-700 rounded-lg py-2 text-sm hover:bg-gray-50 transition-colors">
+                ยกเลิก
+              </button>
+              <button onClick={handleSave} disabled={saving}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg py-2 text-sm font-medium transition-colors">
+                {saving ? 'บันทึก...' : 'ยืนยัน'}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,41 +1,47 @@
 import { Timestamp } from 'firebase/firestore'
 
-export type TimeSlot = '08:00-10:00' | '10:00-12:00' | '13:00-15:00' | '15:00-17:00'
-export type TruckNumber = 1 | 2 | 3
+export type TimeSlot = 'เช้า' | 'บ่าย'
+export type TruckName = 'รถพี่เอก' | 'รถพี่เล็ก'
 
-export const TIME_SLOTS: TimeSlot[] = [
-  '08:00-10:00',
-  '10:00-12:00',
-  '13:00-15:00',
-  '15:00-17:00',
-]
+export const TIME_SLOTS: TimeSlot[] = ['เช้า', 'บ่าย']
+export const TRUCK_NAMES: TruckName[] = ['รถพี่เอก', 'รถพี่เล็ก']
 
-export const TRUCK_NUMBERS: TruckNumber[] = [1, 2, 3]
+export const SLOT_LABEL: Record<TimeSlot, string> = {
+  'เช้า': 'ช่วงเช้า',
+  'บ่าย': 'ช่วงบ่าย',
+}
 
-export interface AppUser {
-  id: string        // Firestore doc id
-  username: string
-  displayName: string
-  role: 'admin' | 'staff'
-  passwordHash: string
-  createdAt: Timestamp
+export interface Customer {
+  cid: string         // client-generated unique id
+  customerName: string
+  phone: string
+  mapsLink: string
+  address: string
+  notes: string
 }
 
 export interface Booking {
   id: string
-  date: string      // YYYY-MM-DD
+  date: string        // YYYY-MM-DD
   slot: TimeSlot
-  truck: TruckNumber
-  customerName: string
-  notes: string
-  createdBy: string // username
+  truck: TruckName
+  customers: Customer[]
+  createdBy: string
   createdAt: Timestamp
 }
 
-// Stored in sessionStorage to persist login across page refreshes (cleared on tab close)
 export interface SessionUser {
   id: string
   username: string
   displayName: string
   role: 'admin' | 'staff'
+}
+
+export interface AppUser {
+  id: string
+  username: string
+  displayName: string
+  role: 'admin' | 'staff'
+  passwordHash: string
+  createdAt: Timestamp
 }
