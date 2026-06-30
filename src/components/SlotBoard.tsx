@@ -23,7 +23,7 @@ function formatPhone(raw: string): string {
   return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`
 }
 
-type FormData = Omit<Customer, 'cid' | 'createdBy'>
+type FormData = Omit<Customer, 'cid' | 'createdBy' | 'createdByName'>
 
 function emptyForm(): FormData {
   return { customerName: '', phone: '', mapsLink: '', address: '', notes: '' }
@@ -90,6 +90,7 @@ export default function SlotBoard({ selectedDate }: Props) {
       ...form,
       customerName: form.customerName.trim(),
       createdBy: currentUser.username,
+      createdByName: currentUser.displayName,
     }
 
     try {
@@ -205,8 +206,8 @@ export default function SlotBoard({ selectedDate }: Props) {
                                   </a>
                                 )}
                                 {/* Who booked */}
-                                <p className="text-gray-300 pt-0.5 border-t border-blue-100 mt-1">
-                                  จองโดย @{c.createdBy}
+                                <p className="pt-1 mt-1 border-t border-blue-100 text-gray-500 font-semibold">
+                                  จองโดย {c.createdByName || c.createdBy}
                                 </p>
                               </div>
                             )}

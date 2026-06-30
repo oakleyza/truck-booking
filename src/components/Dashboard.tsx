@@ -110,6 +110,11 @@ export default function Dashboard() {
                                     ดูแผนที่ →
                                   </a>
                                 )}
+                                {(c.createdByName || c.createdBy) && (
+                                  <p className="text-xs font-semibold text-gray-500 mt-1 pt-1 border-t border-blue-100">
+                                    จองโดย {c.createdByName || c.createdBy}
+                                  </p>
+                                )}
                               </div>
                             </div>
                           </li>
