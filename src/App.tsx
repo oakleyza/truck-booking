@@ -28,10 +28,12 @@ export default function App() {
 
   if (!currentUser) return <Login />
 
-  const tabs: { id: Tab; label: string; adminOnly?: boolean }[] = [
+  const isDriver = currentUser.role === 'driver'
+
+  const tabs: { id: Tab; label: string; adminOnly?: boolean; hideForDriver?: boolean }[] = [
     { id: 'dashboard', label: '📊 ภาพรวม' },
-    { id: 'booking',   label: '📅 จองรถ' },
-    { id: 'admin',     label: '⚙️ จัดการบัญชี', adminOnly: true },
+    { id: 'booking',   label: '📅 จองรถ',         hideForDriver: true },
+    { id: 'admin',     label: '⚙️ จัดการบัญชี',  adminOnly: true },
   ]
 
   return (
@@ -54,6 +56,7 @@ export default function App() {
       <div className="bg-white border-b border-gray-200 px-4 flex gap-1">
         {tabs
           .filter(t => !t.adminOnly || currentUser.role === 'admin')
+          .filter(t => !t.hideForDriver || !isDriver)
           .map(t => (
             <button
               key={t.id}
@@ -73,7 +76,7 @@ export default function App() {
       <main className="max-w-4xl mx-auto p-4">
         {tab === 'admin' && currentUser.role === 'admin' ? (
           <AdminPanel />
-        ) : tab === 'dashboard' ? (
+        ) : tab !== 'booking' || isDriver ? (
           <Dashboard />
         ) : (
           <div className="flex flex-col lg:flex-row gap-4">
