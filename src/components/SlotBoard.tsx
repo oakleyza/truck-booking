@@ -220,8 +220,8 @@ export default function SlotBoard({ selectedDate }: Props) {
                             {/* Expanded detail */}
                             {expandedCid === c.cid && (
                               <div className="mt-2 pt-2 border-t border-blue-200 space-y-1 text-xs text-gray-600">
-                                {c.phone && <p>📞 {c.phone}</p>}
-                                {c.address && <p>🏠 {c.address}</p>}
+                                {c.phone && <p className="text-sm">📞 {c.phone}</p>}
+                                {c.address && <p className="text-sm">🏠 {c.address}</p>}
                                 {c.notes && <p className="italic text-gray-400">💬 {c.notes}</p>}
                                 {c.mapsLink && (
                                   <a
@@ -229,7 +229,7 @@ export default function SlotBoard({ selectedDate }: Props) {
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     onClick={e => e.stopPropagation()}
-                                    className="text-blue-500 hover:underline flex items-center gap-1"
+                                    className="text-sm text-blue-500 hover:underline flex items-center gap-1"
                                   >
                                     📌 ดูแผนที่
                                   </a>

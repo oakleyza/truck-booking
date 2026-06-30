@@ -103,12 +103,12 @@ export default function Dashboard() {
                               <span className="text-xs font-bold text-blue-400 mt-0.5 shrink-0">{i + 1}</span>
                               <div className="min-w-0">
                                 <p className="text-sm font-semibold text-gray-800 truncate">{c.customerName}</p>
-                                {c.phone && <p className="text-xs text-gray-500 mt-0.5">📞 {c.phone}</p>}
-                                {c.address && <p className="text-xs text-gray-500 truncate">📍 {c.address}</p>}
+                                {c.phone && <p className="text-sm text-gray-500 mt-0.5">📞 {c.phone}</p>}
+                                {c.address && <p className="text-sm text-gray-500 truncate">📍 {c.address}</p>}
                                 {c.notes && <p className="text-xs text-gray-400 italic truncate">{c.notes}</p>}
                                 {c.mapsLink && (
                                   <a href={c.mapsLink} target="_blank" rel="noopener noreferrer"
-                                    className="text-xs text-blue-500 hover:underline">
+                                    className="text-sm text-blue-500 hover:underline">
                                     ดูแผนที่ →
                                   </a>
                                 )}
