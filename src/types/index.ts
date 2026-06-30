@@ -18,6 +18,7 @@ export interface Customer {
   mapsLink: string
   address: string
   notes: string
+  createdBy: string   // username ของคนที่เพิ่มลูกค้ารายนี้
 }
 
 export interface Booking {

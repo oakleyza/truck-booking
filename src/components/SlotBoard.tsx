@@ -15,7 +15,17 @@ function uid(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
-function emptyCustomer(): Omit<Customer, 'cid'> {
+// Auto-format phone: 10 digits → xxx-xxx-xxxx
+function formatPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '').slice(0, 10)
+  if (digits.length <= 3) return digits
+  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`
+}
+
+type FormData = Omit<Customer, 'cid' | 'createdBy'>
+
+function emptyForm(): FormData {
   return { customerName: '', phone: '', mapsLink: '', address: '', notes: '' }
 }
 
@@ -25,27 +35,19 @@ function formatDate(dateStr: string): string {
   return `${d} ${months[m - 1]} ${y + 543}`
 }
 
-type ModalMode = 'add' | 'view'
-
 interface ModalState {
-  mode: ModalMode
   slot: TimeSlot
   truck: TruckName
-  booking?: Booking       // existing booking for this cell (if any)
-  editCustomer?: Customer // customer being viewed/edited
+  booking?: Booking
 }
 
 export default function SlotBoard({ selectedDate }: Props) {
   const { currentUser } = useAuth()
   const [bookings, setBookings] = useState<Booking[]>([])
   const [modal, setModal] = useState<ModalState | null>(null)
-
-  // Add customer form state
-  const [form, setForm] = useState(emptyCustomer())
+  const [form, setForm] = useState<FormData>(emptyForm())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-
-  // View customer — expand/collapse detail
   const [expandedCid, setExpandedCid] = useState<string | null>(null)
 
   useEffect(() => {
@@ -60,36 +62,42 @@ export default function SlotBoard({ selectedDate }: Props) {
     return bookings.find(b => b.slot === slot && b.truck === truck)
   }
 
+  function canDeleteCustomer(c: Customer): boolean {
+    if (!currentUser) return false
+    return currentUser.role === 'admin' || c.createdBy === currentUser.username
+  }
+
   function openAdd(slot: TimeSlot, truck: TruckName) {
-    const booking = getBooking(slot, truck)
-    setModal({ mode: 'add', slot, truck, booking })
-    setForm(emptyCustomer())
+    setModal({ slot, truck, booking: getBooking(slot, truck) })
+    setForm(emptyForm())
     setError('')
   }
 
   function closeModal() {
     setModal(null)
     setError('')
-    setExpandedCid(null)
   }
 
-  // Save new customer to a slot
   async function handleSave() {
     if (!modal || !currentUser) return
     if (!form.customerName.trim()) { setError('กรุณากรอกชื่อลูกค้า'); return }
 
     setSaving(true)
     setError('')
-    const newCustomer: Customer = { cid: uid(), ...form, customerName: form.customerName.trim() }
+
+    const newCustomer: Customer = {
+      cid: uid(),
+      ...form,
+      customerName: form.customerName.trim(),
+      createdBy: currentUser.username,
+    }
 
     try {
       if (modal.booking) {
-        // Add to existing booking
         await updateDoc(doc(db, 'bookings', modal.booking.id), {
           customers: [...modal.booking.customers, newCustomer],
         })
       } else {
-        // Create new booking
         await addDoc(collection(db, 'bookings'), {
           date: selectedDate,
           slot: modal.slot,
@@ -107,7 +115,6 @@ export default function SlotBoard({ selectedDate }: Props) {
     }
   }
 
-  // Delete a single customer from a booking
   async function handleDeleteCustomer(booking: Booking, cid: string) {
     if (!confirm('ลบลูกค้ารายนี้ออก?')) return
     const remaining = booking.customers.filter(c => c.cid !== cid)
@@ -117,7 +124,7 @@ export default function SlotBoard({ selectedDate }: Props) {
       } else {
         await updateDoc(doc(db, 'bookings', booking.id), { customers: remaining })
       }
-      closeModal()
+      setExpandedCid(null)
     } catch {
       alert('ลบไม่สำเร็จ กรุณาลองใหม่')
     }
@@ -158,23 +165,26 @@ export default function SlotBoard({ selectedDate }: Props) {
                   return (
                     <td key={truck} className="px-3 py-3 align-top">
                       <div className="space-y-1.5">
-                        {/* Customer list */}
                         {customers.map((c, idx) => (
-                          <div key={c.cid}
+                          <div
+                            key={c.cid}
                             className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 cursor-pointer hover:bg-blue-100 transition-colors"
                             onClick={() => setExpandedCid(expandedCid === c.cid ? null : c.cid)}
                           >
+                            {/* Row header */}
                             <div className="flex items-center justify-between gap-1">
                               <div className="flex items-center gap-1.5 min-w-0">
                                 <span className="text-[10px] font-bold text-blue-400 shrink-0">{idx + 1}</span>
                                 <span className="text-xs font-semibold text-gray-800 truncate">{c.customerName}</span>
                               </div>
-                              <button
-                                onClick={e => { e.stopPropagation(); booking && handleDeleteCustomer(booking, c.cid) }}
-                                className="text-[10px] text-red-400 hover:text-red-600 shrink-0 px-1 py-0.5 rounded hover:bg-red-50"
-                              >
-                                ลบ
-                              </button>
+                              {canDeleteCustomer(c) && (
+                                <button
+                                  onClick={e => { e.stopPropagation(); booking && handleDeleteCustomer(booking, c.cid) }}
+                                  className="text-[10px] text-red-400 hover:text-red-600 shrink-0 px-1 py-0.5 rounded hover:bg-red-50"
+                                >
+                                  ลบ
+                                </button>
+                              )}
                             </div>
 
                             {/* Expanded detail */}
@@ -184,12 +194,20 @@ export default function SlotBoard({ selectedDate }: Props) {
                                 {c.address && <p>🏠 {c.address}</p>}
                                 {c.notes && <p className="italic text-gray-400">💬 {c.notes}</p>}
                                 {c.mapsLink && (
-                                  <a href={c.mapsLink} target="_blank" rel="noopener noreferrer"
+                                  <a
+                                    href={c.mapsLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
                                     onClick={e => e.stopPropagation()}
-                                    className="text-blue-500 hover:underline flex items-center gap-1">
+                                    className="text-blue-500 hover:underline flex items-center gap-1"
+                                  >
                                     📌 ดูแผนที่
                                   </a>
                                 )}
+                                {/* Who booked */}
+                                <p className="text-gray-300 pt-0.5 border-t border-blue-100 mt-1">
+                                  จองโดย @{c.createdBy}
+                                </p>
                               </div>
                             )}
                           </div>
@@ -217,9 +235,11 @@ export default function SlotBoard({ selectedDate }: Props) {
       </div>
 
       {/* Add customer modal */}
-      {modal?.mode === 'add' && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
-          onClick={e => { if (e.target === e.currentTarget) closeModal() }}>
+      {modal && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+          onClick={e => { if (e.target === e.currentTarget) closeModal() }}
+        >
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
             <h3 className="font-bold text-gray-800 mb-1">
               {modal.booking ? 'เพิ่มลูกค้า' : 'จองรถ'}
@@ -248,7 +268,7 @@ export default function SlotBoard({ selectedDate }: Props) {
                 <input
                   type="tel"
                   value={form.phone}
-                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                  onChange={e => setForm(f => ({ ...f, phone: formatPhone(e.target.value) }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="0xx-xxx-xxxx"
                 />
@@ -290,12 +310,17 @@ export default function SlotBoard({ selectedDate }: Props) {
             {error && <p className="text-red-600 text-xs mt-2">{error}</p>}
 
             <div className="flex gap-2 mt-4">
-              <button onClick={closeModal}
-                className="flex-1 border border-gray-300 text-gray-700 rounded-lg py-2 text-sm hover:bg-gray-50 transition-colors">
+              <button
+                onClick={closeModal}
+                className="flex-1 border border-gray-300 text-gray-700 rounded-lg py-2 text-sm hover:bg-gray-50 transition-colors"
+              >
                 ยกเลิก
               </button>
-              <button onClick={handleSave} disabled={saving}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg py-2 text-sm font-medium transition-colors">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg py-2 text-sm font-medium transition-colors"
+              >
                 {saving ? 'บันทึก...' : 'ยืนยัน'}
               </button>
             </div>
