@@ -32,10 +32,14 @@ export default function AdminPanel() {
 
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
+  const ROLE_ORDER: Record<string, number> = { admin: 0, dispatcher: 1, staff: 2, driver: 3 }
+
   useEffect(() => {
     const q = query(collection(db, 'users'))
     return onSnapshot(q, snap => {
-      setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() } as AppUser)))
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as AppUser))
+      list.sort((a, b) => (ROLE_ORDER[a.role] ?? 99) - (ROLE_ORDER[b.role] ?? 99))
+      setUsers(list)
     })
   }, [])
 
