@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { collection, query, where, onSnapshot } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { useUsers } from '../hooks/useUsers'
+import { useTruckStatus } from '../hooks/useTruckStatus'
+import { useAuth } from '../contexts/AuthContext'
 import { Booking, TRUCK_NAMES, TIME_SLOTS, TruckName, TimeSlot, SLOT_LABEL } from '../types'
 
 function todayStr(): string {
@@ -26,6 +28,13 @@ export default function Dashboard() {
   const today = todayStr()
   const [bookings, setBookings] = useState<Booking[]>([])
   const { getDisplayName } = useUsers()
+  const { currentUser } = useAuth()
+  const { isTruckDisabled, toggleTruck } = useTruckStatus(today)
+
+  function canToggleTruck(): boolean {
+    if (!currentUser) return false
+    return currentUser.role === 'admin' || currentUser.role === 'dispatcher'
+  }
 
   useEffect(() => {
     const q = query(collection(db, 'bookings'), where('date', '==', today))
@@ -67,12 +76,33 @@ export default function Dashboard() {
 
       {/* Truck cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {TRUCK_NAMES.map(truck => (
-          <div key={truck} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        {TRUCK_NAMES.map(truck => {
+          const truckDisabled = isTruckDisabled(truck)
+          return (
+          <div key={truck} className={`bg-white rounded-xl border shadow-sm overflow-hidden ${truckDisabled ? 'border-red-200' : 'border-gray-200'}`}>
             {/* Card header */}
-            <div className="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
-              <span className="text-xl">{TRUCK_EMOJI[truck]}</span>
-              <span className="font-bold text-gray-800">{truck}</span>
+            <div className={`px-4 py-3 border-b flex items-center justify-between ${truckDisabled ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'}`}>
+              <div className="flex items-center gap-2">
+                <span className="text-xl">{TRUCK_EMOJI[truck]}</span>
+                <span className={`font-bold ${truckDisabled ? 'text-gray-400' : 'text-gray-800'}`}>{truck}</span>
+                <span className={`text-[12px] font-medium px-2 py-0.5 rounded-full ${
+                  truckDisabled ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'
+                }`}>
+                  {truckDisabled ? '🔴 ปิดใช้งาน' : '🟢 พร้อมใช้'}
+                </span>
+              </div>
+              {canToggleTruck() && (
+                <button
+                  onClick={() => currentUser && toggleTruck(truck, currentUser)}
+                  className={`text-xs px-3 py-1 rounded-lg border font-medium transition-colors ${
+                    truckDisabled
+                      ? 'border-green-300 text-green-600 hover:bg-green-50'
+                      : 'border-red-300 text-red-500 hover:bg-red-50'
+                  }`}
+                >
+                  {truckDisabled ? 'เปิดรถ' : 'ปิดรถ'}
+                </button>
+              )}
             </div>
 
             {/* Slots */}
@@ -130,7 +160,8 @@ export default function Dashboard() {
               })}
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

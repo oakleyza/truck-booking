@@ -5,7 +5,7 @@ import {
 } from 'firebase/firestore'
 import bcrypt from 'bcryptjs'
 import { db } from '../lib/firebase'
-import { AppUser } from '../types'
+import { AppUser, UserRole } from '../types'
 
 const BCRYPT_ROUNDS = 10
 
@@ -18,7 +18,7 @@ export default function AdminPanel() {
   const [addUsername, setAddUsername] = useState('')
   const [addDisplayName, setAddDisplayName] = useState('')
   const [addPassword, setAddPassword] = useState('')
-  const [addRole, setAddRole] = useState<'staff' | 'admin'>('staff')
+  const [addRole, setAddRole] = useState<UserRole>('staff')
   const [addError, setAddError] = useState('')
   const [addSaving, setAddSaving] = useState(false)
 
@@ -26,7 +26,7 @@ export default function AdminPanel() {
   const [editUser, setEditUser] = useState<AppUser | null>(null)
   const [editDisplayName, setEditDisplayName] = useState('')
   const [editPassword, setEditPassword] = useState('')
-  const [editRole, setEditRole] = useState<'staff' | 'admin'>('staff')
+  const [editRole, setEditRole] = useState<UserRole>('staff')
   const [editError, setEditError] = useState('')
   const [editSaving, setEditSaving] = useState(false)
 
@@ -178,9 +178,11 @@ export default function AdminPanel() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">สิทธิ์</label>
-                <select value={addRole} onChange={e => setAddRole(e.target.value as 'staff' | 'admin')}
+                <select value={addRole} onChange={e => setAddRole(e.target.value as UserRole)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="driver">พนักงานขับรถ (ดูอย่างเดียว)</option>
                   <option value="staff">พนักงาน</option>
+                  <option value="dispatcher">พนักงานจัดรถ</option>
                   <option value="admin">แอดมิน</option>
                 </select>
               </div>
@@ -212,9 +214,15 @@ export default function AdminPanel() {
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-sm text-gray-800">{user.displayName}</span>
                     <span className={`text-[12px] font-medium px-1.5 py-0.5 rounded-full ${
-                      user.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
+                      user.role === 'admin' ? 'bg-purple-100 text-purple-700'
+                      : user.role === 'dispatcher' ? 'bg-blue-100 text-blue-700'
+                      : user.role === 'driver' ? 'bg-yellow-100 text-yellow-700'
+                      : 'bg-gray-100 text-gray-600'
                     }`}>
-                      {user.role === 'admin' ? 'แอดมิน' : 'พนักงาน'}
+                      {user.role === 'admin' ? 'แอดมิน'
+                       : user.role === 'dispatcher' ? 'พนักงานจัดรถ'
+                       : user.role === 'driver' ? 'พนักงานขับรถ'
+                       : 'พนักงาน'}
                     </span>
                   </div>
                   <div className="text-xs text-gray-400 mt-0.5">@{user.username}</div>
@@ -261,9 +269,11 @@ export default function AdminPanel() {
 
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">สิทธิ์</label>
-                <select value={editRole} onChange={e => setEditRole(e.target.value as 'staff' | 'admin')}
+                <select value={editRole} onChange={e => setEditRole(e.target.value as UserRole)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="driver">พนักงานขับรถ (ดูอย่างเดียว)</option>
                   <option value="staff">พนักงาน</option>
+                  <option value="dispatcher">พนักงานจัดรถ</option>
                   <option value="admin">แอดมิน</option>
                 </select>
               </div>

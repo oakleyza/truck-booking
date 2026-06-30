@@ -32,18 +32,28 @@ export interface Booking {
   createdAt: Timestamp
 }
 
+export type UserRole = 'admin' | 'dispatcher' | 'staff' | 'driver'
+
 export interface SessionUser {
   id: string
   username: string
   displayName: string
-  role: 'admin' | 'staff'
+  role: UserRole
 }
 
 export interface AppUser {
   id: string
   username: string
   displayName: string
-  role: 'admin' | 'staff'
+  role: UserRole
   passwordHash: string
   createdAt: Timestamp
+}
+
+export interface TruckStatus {
+  id: string
+  date: string
+  truck: TruckName
+  disabled: boolean
+  updatedBy: string
 }

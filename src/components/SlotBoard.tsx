@@ -7,6 +7,7 @@ import { db } from '../lib/firebase'
 import { useAuth } from '../contexts/AuthContext'
 import { useUsers } from '../hooks/useUsers'
 import { TIME_SLOTS, TRUCK_NAMES, SLOT_LABEL, TimeSlot, TruckName, Booking, Customer } from '../types'
+import { useTruckStatus } from '../hooks/useTruckStatus'
 
 interface Props {
   selectedDate: string
@@ -55,6 +56,7 @@ interface ModalState {
 export default function SlotBoard({ selectedDate }: Props) {
   const { currentUser } = useAuth()
   const { getDisplayName } = useUsers()
+  const { isTruckDisabled, toggleTruck } = useTruckStatus(selectedDate)
   const [bookings, setBookings] = useState<Booking[]>([])
   const [modal, setModal] = useState<ModalState | null>(null)
   const [form, setForm] = useState<FormData>(emptyForm())
@@ -74,9 +76,20 @@ export default function SlotBoard({ selectedDate }: Props) {
     return bookings.find(b => b.slot === slot && b.truck === truck)
   }
 
+  function canBook(): boolean {
+    if (!currentUser) return false
+    return currentUser.role !== 'driver'
+  }
+
   function canEditCustomer(c: Customer): boolean {
     if (!currentUser) return false
+    if (currentUser.role === 'driver') return false
     return currentUser.role === 'admin' || c.createdBy === currentUser.username
+  }
+
+  function canToggleTruck(): boolean {
+    if (!currentUser) return false
+    return currentUser.role === 'admin' || currentUser.role === 'dispatcher'
   }
 
   function openAdd(slot: TimeSlot, truck: TruckName) {
@@ -183,11 +196,39 @@ export default function SlotBoard({ selectedDate }: Props) {
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="text-left px-4 py-2.5 font-medium text-gray-400 text-xs w-24">ช่วงเวลา</th>
-              {TRUCK_NAMES.map(t => (
-                <th key={t} className="text-center px-3 py-2.5 font-semibold text-gray-700 text-sm">
-                  🚚 {t}
-                </th>
-              ))}
+              {TRUCK_NAMES.map(t => {
+                const disabled = isTruckDisabled(t)
+                return (
+                  <th key={t} className="text-center px-3 py-2.5">
+                    <div className="flex flex-col items-center gap-1">
+                      <span className={`font-semibold text-sm ${disabled ? 'text-gray-400' : 'text-gray-700'}`}>
+                        🚚 {t}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[12px] font-medium px-2 py-0.5 rounded-full ${
+                          disabled
+                            ? 'bg-red-100 text-red-600'
+                            : 'bg-green-100 text-green-700'
+                        }`}>
+                          {disabled ? '🔴 ปิดใช้งาน' : '🟢 พร้อมใช้'}
+                        </span>
+                        {canToggleTruck() && (
+                          <button
+                            onClick={() => currentUser && toggleTruck(t, currentUser)}
+                            className={`text-[12px] px-2 py-0.5 rounded-full border transition-colors font-medium ${
+                              disabled
+                                ? 'border-green-300 text-green-600 hover:bg-green-50'
+                                : 'border-red-300 text-red-500 hover:bg-red-50'
+                            }`}
+                          >
+                            {disabled ? 'เปิด' : 'ปิด'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </th>
+                )
+              })}
             </tr>
           </thead>
           <tbody>
@@ -199,9 +240,13 @@ export default function SlotBoard({ selectedDate }: Props) {
                 {TRUCK_NAMES.map(truck => {
                   const booking = getBooking(slot, truck)
                   const customers = booking?.customers ?? []
+                  const truckDisabled = isTruckDisabled(truck)
 
                   return (
-                    <td key={truck} className="px-3 py-3 align-top">
+                    <td key={truck} className={`px-3 py-3 align-top ${truckDisabled ? 'bg-gray-50/60' : ''}`}>
+                      {truckDisabled && customers.length === 0 ? (
+                        <div className="text-center py-4 text-xs text-gray-300 italic">ปิดใช้งานวันนี้</div>
+                      ) : (
                       <div className="space-y-1.5">
                         {customers.map((c, idx) => (
                           <div
@@ -261,18 +306,24 @@ export default function SlotBoard({ selectedDate }: Props) {
                           </div>
                         ))}
 
-                        {/* Add button */}
-                        <button
-                          onClick={() => openAdd(slot, truck)}
-                          className={`w-full rounded-lg py-2 text-xs transition-colors ${
-                            customers.length === 0
-                              ? 'border-2 border-dashed border-gray-200 hover:border-blue-400 hover:bg-blue-50 text-gray-300 hover:text-blue-400'
-                              : 'border border-dashed border-blue-200 hover:border-blue-400 text-blue-400 hover:text-blue-600 hover:bg-blue-50'
-                          }`}
-                        >
-                          {customers.length === 0 ? '+ จอง' : '+ เพิ่มลูกค้า'}
-                        </button>
+                        {/* Add button — ซ่อนถ้ารถปิด หรือเป็น driver */}
+                        {!truckDisabled && canBook() && (
+                          <button
+                            onClick={() => openAdd(slot, truck)}
+                            className={`w-full rounded-lg py-2 text-xs transition-colors ${
+                              customers.length === 0
+                                ? 'border-2 border-dashed border-gray-200 hover:border-blue-400 hover:bg-blue-50 text-gray-300 hover:text-blue-400'
+                                : 'border border-dashed border-blue-200 hover:border-blue-400 text-blue-400 hover:text-blue-600 hover:bg-blue-50'
+                            }`}
+                          >
+                            {customers.length === 0 ? '+ จอง' : '+ เพิ่มลูกค้า'}
+                          </button>
+                        )}
+                        {truckDisabled && customers.length > 0 && (
+                          <div className="text-center text-[12px] text-red-400 italic py-1">รถปิดใช้งานวันนี้</div>
+                        )}
                       </div>
+                      )}
                     </td>
                   )
                 })}
