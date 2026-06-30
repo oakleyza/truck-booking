@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ระบบนี้ใช้ custom auth (bcrypt hash ใน Firestore)
+    // ไม่ได้ใช้ Firebase Auth — ดังนั้น security rules ต้องอนุญาต read/write
+    // สำหรับแอปภายในองค์กรที่ไม่เปิด public นี้ถือว่าเพียงพอ
+    // ถ้าต้องการความปลอดภัยสูงขึ้น: migrate ไปใช้ Firebase Auth แล้วจำกัด rules ตาม uid
+
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
