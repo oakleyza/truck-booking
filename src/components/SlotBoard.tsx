@@ -212,7 +212,7 @@ export default function SlotBoard({ selectedDate }: Props) {
                             {/* Row header */}
                             <div className="flex items-center justify-between gap-1">
                               <div className="flex items-center gap-1.5 min-w-0">
-                                <span className="text-[10px] font-bold text-blue-400 shrink-0">{idx + 1}</span>
+                                <span className="text-[12px] font-bold text-blue-400 shrink-0">{idx + 1}</span>
                                 <span className="text-xs font-semibold text-gray-800 truncate">{c.customerName}</span>
                               </div>
                             </div>
@@ -244,13 +244,13 @@ export default function SlotBoard({ selectedDate }: Props) {
                                   <div className="flex gap-2 pt-1" onClick={e => e.stopPropagation()}>
                                     <button
                                       onClick={() => openEdit(booking, c)}
-                                      className="flex-1 text-center text-[11px] font-medium text-blue-600 bg-white hover:bg-blue-600 hover:text-white border border-blue-200 rounded-lg py-1 transition-colors"
+                                      className="flex-1 text-center text-[13px] font-medium text-blue-600 bg-white hover:bg-blue-600 hover:text-white border border-blue-200 rounded-lg py-1 transition-colors"
                                     >
                                       แก้ไข
                                     </button>
                                     <button
                                       onClick={() => handleDeleteCustomer(booking, c.cid)}
-                                      className="flex-1 text-center text-[11px] font-medium text-red-500 bg-white hover:bg-red-500 hover:text-white border border-red-200 rounded-lg py-1 transition-colors"
+                                      className="flex-1 text-center text-[13px] font-medium text-red-500 bg-white hover:bg-red-500 hover:text-white border border-red-200 rounded-lg py-1 transition-colors"
                                     >
                                       ลบ
                                     </button>

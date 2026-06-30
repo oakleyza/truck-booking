@@ -126,7 +126,7 @@ export default function Calendar({ selectedDate, onSelectDate }: Props) {
               <span>{day}</span>
               {count > 0 && (
                 <span className={`
-                  text-[9px] font-bold leading-none mt-0.5
+                  text-[11px] font-bold leading-none mt-0.5
                   ${isSelected ? 'text-blue-200' : 'text-blue-500'}
                 `}>
                   {count}

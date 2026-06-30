@@ -211,7 +211,7 @@ export default function AdminPanel() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-sm text-gray-800">{user.displayName}</span>
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                    <span className={`text-[12px] font-medium px-1.5 py-0.5 rounded-full ${
                       user.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
                     }`}>
                       {user.role === 'admin' ? 'แอดมิน' : 'พนักงาน'}

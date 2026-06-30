@@ -86,7 +86,7 @@ export default function Dashboard() {
                   <div key={slot} className="px-4 py-3">
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-xs font-semibold text-gray-500">{SLOT_LABEL[slot]}</span>
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                      <span className={`text-[12px] font-medium px-2 py-0.5 rounded-full ${
                         hasJob
                           ? 'bg-blue-100 text-blue-700'
                           : 'bg-green-100 text-green-700'
