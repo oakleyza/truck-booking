@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { collection, query, where, onSnapshot } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { useUsers } from '../hooks/useUsers'
 import { Booking, TRUCK_NAMES, TIME_SLOTS, TruckName, TimeSlot, SLOT_LABEL } from '../types'
 
 function todayStr(): string {
@@ -24,6 +25,7 @@ const TRUCK_EMOJI: Record<TruckName, string> = {
 export default function Dashboard() {
   const today = todayStr()
   const [bookings, setBookings] = useState<Booking[]>([])
+  const { getDisplayName } = useUsers()
 
   useEffect(() => {
     const q = query(collection(db, 'bookings'), where('date', '==', today))
@@ -110,9 +112,9 @@ export default function Dashboard() {
                                     ดูแผนที่ →
                                   </a>
                                 )}
-                                {(c.createdByName || c.createdBy) && (
+                                {c.createdBy && (
                                   <p className="text-xs font-semibold text-gray-500 mt-1 pt-1 border-t border-blue-100">
-                                    จองโดย {c.createdByName || c.createdBy}
+                                    จองโดย {getDisplayName(c.createdBy)}
                                   </p>
                                 )}
                               </div>
