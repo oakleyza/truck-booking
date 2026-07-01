@@ -64,6 +64,11 @@ export default function SlotBoard({ selectedDate }: Props) {
   const [error, setError] = useState('')
   const [expandedCid, setExpandedCid] = useState<string | null>(null)
 
+  // Drag-and-drop state
+  interface DragInfo { customer: Customer; sourceBooking: Booking }
+  const [dragInfo, setDragInfo] = useState<DragInfo | null>(null)
+  const [dropTarget, setDropTarget] = useState<string | null>(null) // `${slot}|${truck}`
+
   useEffect(() => {
     if (!selectedDate) return
     const q = query(collection(db, 'bookings'), where('date', '==', selectedDate))
@@ -90,6 +95,55 @@ export default function SlotBoard({ selectedDate }: Props) {
   function canToggleTruck(): boolean {
     if (!currentUser) return false
     return currentUser.role === 'admin' || currentUser.role === 'dispatcher'
+  }
+
+  function canDragCustomer(c: Customer): boolean {
+    if (!currentUser) return false
+    if (currentUser.role === 'driver' || currentUser.role === 'staff') {
+      return c.createdBy === currentUser.username
+    }
+    return currentUser.role === 'admin' || currentUser.role === 'dispatcher'
+  }
+
+  async function handleDrop(targetSlot: TimeSlot, targetTruck: TruckName) {
+    setDropTarget(null)
+    if (!dragInfo) return
+    const { customer, sourceBooking } = dragInfo
+    setDragInfo(null)
+
+    // Same cell → no-op
+    if (sourceBooking.slot === targetSlot && sourceBooking.truck === targetTruck) return
+    // Target truck disabled → no-op
+    if (isTruckDisabled(targetTruck)) return
+
+    const targetBooking = getBooking(targetSlot, targetTruck)
+
+    try {
+      // Remove from source
+      const remaining = sourceBooking.customers.filter(c => c.cid !== customer.cid)
+      if (remaining.length === 0) {
+        await deleteDoc(doc(db, 'bookings', sourceBooking.id))
+      } else {
+        await updateDoc(doc(db, 'bookings', sourceBooking.id), { customers: remaining })
+      }
+      // Add to target
+      if (targetBooking) {
+        await updateDoc(doc(db, 'bookings', targetBooking.id), {
+          customers: [...targetBooking.customers, customer],
+        })
+      } else {
+        await addDoc(collection(db, 'bookings'), {
+          date: selectedDate,
+          slot: targetSlot,
+          truck: targetTruck,
+          customers: [customer],
+          createdBy: customer.createdBy,
+          createdAt: serverTimestamp(),
+        })
+      }
+    } catch {
+      alert('ย้ายไม่สำเร็จ กรุณาลองใหม่')
+    }
   }
 
   function openAdd(slot: TimeSlot, truck: TruckName) {
@@ -242,16 +296,40 @@ export default function SlotBoard({ selectedDate }: Props) {
                   const customers = booking?.customers ?? []
                   const truckDisabled = isTruckDisabled(truck)
 
+                  const cellKey = `${slot}|${truck}`
+                  const isDragOver = dropTarget === cellKey && !truckDisabled
+
                   return (
-                    <td key={truck} className={`px-3 py-3 align-top ${truckDisabled ? 'bg-gray-50/60' : ''}`}>
+                    <td
+                      key={truck}
+                      className={`px-3 py-3 align-top transition-colors ${truckDisabled ? 'bg-gray-50/60' : ''} ${isDragOver ? 'bg-blue-50 outline outline-2 outline-blue-400 outline-offset-[-2px] rounded' : ''}`}
+                      onDragOver={e => { e.preventDefault(); if (!truckDisabled) setDropTarget(cellKey) }}
+                      onDragEnter={e => { e.preventDefault(); if (!truckDisabled) setDropTarget(cellKey) }}
+                      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTarget(null) }}
+                      onDrop={e => { e.preventDefault(); handleDrop(slot, truck) }}
+                    >
                       {truckDisabled && customers.length === 0 ? (
                         <div className="text-center py-4 text-xs text-gray-300 italic">ปิดใช้งานวันนี้</div>
                       ) : (
                       <div className="space-y-1.5">
-                        {customers.map((c, idx) => (
+                        {customers.map((c, idx) => {
+                          const draggable = canDragCustomer(c)
+                          const isDragging = dragInfo?.customer.cid === c.cid
+                          return (
                           <div
                             key={c.cid}
-                            className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 cursor-pointer hover:bg-blue-100 transition-colors"
+                            draggable={draggable}
+                            onDragStart={e => {
+                              if (!booking) return
+                              e.dataTransfer.effectAllowed = 'move'
+                              setDragInfo({ customer: c, sourceBooking: booking })
+                              setExpandedCid(null)
+                            }}
+                            onDragEnd={() => { setDragInfo(null); setDropTarget(null) }}
+                            className={`border rounded-lg px-3 py-2 transition-colors
+                              ${isDragging ? 'opacity-40 bg-blue-100 border-blue-200' : 'bg-blue-50 border-blue-100 hover:bg-blue-100'}
+                              ${draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}
+                            `}
                             onClick={() => setExpandedCid(expandedCid === c.cid ? null : c.cid)}
                           >
                             {/* Row header */}
@@ -260,6 +338,7 @@ export default function SlotBoard({ selectedDate }: Props) {
                                 <span className="text-[12px] font-bold text-blue-400 shrink-0">{idx + 1}</span>
                                 <span className="text-xs font-semibold text-gray-800 truncate">{c.customerName}</span>
                               </div>
+                              {draggable && <span className="text-gray-300 text-xs shrink-0 select-none">⠿</span>}
                             </div>
 
                             {/* Expanded detail */}
@@ -304,7 +383,8 @@ export default function SlotBoard({ selectedDate }: Props) {
                               </div>
                             )}
                           </div>
-                        ))}
+                          )
+                        })}
 
                         {/* Add button — ซ่อนถ้ารถปิด หรือเป็น driver */}
                         {!truckDisabled && canBook() && (
