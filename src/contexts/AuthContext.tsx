@@ -20,12 +20,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const saved = sessionStorage.getItem(SESSION_KEY)
+    const saved = localStorage.getItem(SESSION_KEY)
     if (saved) {
       try {
         setCurrentUser(JSON.parse(saved) as SessionUser)
       } catch {
-        sessionStorage.removeItem(SESSION_KEY)
+        localStorage.removeItem(SESSION_KEY)
       }
     }
     setLoading(false)
@@ -56,12 +56,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       displayName: userData.displayName,
       role: userData.role,
     }
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(session))
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session))
     setCurrentUser(session)
   }
 
   function logout() {
-    sessionStorage.removeItem(SESSION_KEY)
+    localStorage.removeItem(SESSION_KEY)
     setCurrentUser(null)
   }
 
